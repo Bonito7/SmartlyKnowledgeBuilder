@@ -1,0 +1,18 @@
+# Environnement virtuel Python
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# Fichiers locaux sensibles
+*.json.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
