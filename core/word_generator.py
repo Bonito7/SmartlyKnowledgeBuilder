@@ -1,11 +1,18 @@
 from docx import Document
 from docx.shared import Pt, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from datetime import datetime
 import os
+
+from core.html_cleaner import HTMLCleaner
+from core.text_utils import (
+    format_date,
+    format_id,
+    is_blank,
+)
 
 
 class WordGenerator:
@@ -300,6 +307,239 @@ class WordGenerator:
         )
 
         run.font.size = Pt(8)
+
+    # =========================================================
+    # PAGE DE GARDE YELEN
+    # =========================================================
+
+    def add_yelen_cover(self, document, category, number_items):
+
+        document.add_heading(
+            "SMARTLY KNOWLEDGE BASE",
+            level=1
+        )
+
+        paragraph = document.add_paragraph()
+
+        paragraph.add_run(
+            "\nDocumentation YelenIA\n\n"
+            f"Catégorie : {category}\n"
+            f"Nombre de connaissances : {number_items}\n"
+            f"Généré le : {datetime.now().strftime('%d/%m/%Y')}"
+        )
+
+        document.add_paragraph().add_run().add_break(
+            WD_BREAK.PAGE
+        )
+
+    # =========================================================
+    # UN CONTENU YELEN
+    # =========================================================
+
+    def add_yelen_item(
+        self,
+        document,
+        index,
+        row,
+        content_type,
+        metadata
+    ):
+
+        title = row.get("title", "") or "(sans titre)"
+
+        # -----------------------------------------------------
+        # TITRE
+        # -----------------------------------------------------
+
+        document.add_heading(
+            f"{index}. {title}",
+            level=2
+        )
+
+        # -----------------------------------------------------
+        # METADONNEES IA
+        # -----------------------------------------------------
+
+        document.add_heading(
+            "Intention de recherche",
+            level=3
+        )
+
+        document.add_paragraph(
+            metadata["intention"]
+        )
+
+        document.add_heading(
+            "Question utilisateur probable",
+            level=3
+        )
+
+        document.add_paragraph(
+            metadata["question"]
+        )
+
+        # -----------------------------------------------------
+        # INFORMATIONS
+        # -----------------------------------------------------
+
+        document.add_heading(
+            "Informations",
+            level=3
+        )
+
+        identifier = format_id(row.get("id_contenu"))
+
+        if identifier:
+            document.add_paragraph(
+                f"Identifiant : {identifier}"
+            )
+
+        document.add_paragraph(
+            f"Type : {content_type}"
+        )
+
+        date_creation = format_date(
+            row.get("date_creation")
+        )
+
+        if date_creation:
+            document.add_paragraph(
+                f"Date création : {date_creation}"
+            )
+
+        date_modification = format_date(
+            row.get("date_modification")
+        )
+
+        if date_modification:
+            document.add_paragraph(
+                f"Dernière modification : {date_modification}"
+            )
+
+        # -----------------------------------------------------
+        # CONTENU
+        # -----------------------------------------------------
+
+        body = HTMLCleaner.clean(row.get("body_html"))
+
+        if body:
+
+            document.add_heading(
+                "Contenu",
+                level=3
+            )
+
+            document.add_paragraph(body)
+
+        # -----------------------------------------------------
+        # SOURCE
+        # -----------------------------------------------------
+
+        source = row.get("source")
+
+        if not is_blank(source):
+
+            document.add_heading(
+                "Source",
+                level=3
+            )
+
+            document.add_paragraph(str(source).strip())
+
+        # -----------------------------------------------------
+        # PIECES JOINTES
+        # -----------------------------------------------------
+
+        filename = row.get("filename")
+
+        if not is_blank(filename):
+
+            document.add_heading(
+                "Pièces jointes",
+                level=3
+            )
+
+            document.add_paragraph(
+                f"- {str(filename).strip()}"
+            )
+
+            file_url = row.get("file_url")
+
+            if not is_blank(file_url):
+                document.add_paragraph(
+                    str(file_url).strip()
+                )
+
+        # Séparateur
+        document.add_paragraph()
+
+    # =========================================================
+    # GENERATION YELEN
+    # =========================================================
+
+    def generate_document(
+        self,
+        dataframe,
+        content_type,
+        ai_metadata
+    ):
+
+        document = Document()
+
+        self.setup_document(document)
+
+        self.add_page_number(
+            document.sections[0]
+        )
+
+        category = str(content_type).replace("_", " ").title()
+
+        # Un contenu = un identifiant (plusieurs lignes = pièces jointes)
+        grouped = dataframe.groupby(
+            "id_contenu",
+            dropna=True
+        )
+
+        self.add_yelen_cover(
+            document,
+            category,
+            grouped.ngroups
+        )
+
+        for index, (_, group) in enumerate(
+            grouped,
+            start=1
+        ):
+
+            row = group.iloc[0]
+
+            title = row.get("title", "")
+
+            metadata = {
+                "intention": ai_metadata.generate_intention(
+                    title
+                ),
+                "question": ai_metadata.generate_question(
+                    title
+                ),
+            }
+
+            self.add_yelen_item(
+                document,
+                index,
+                row,
+                content_type,
+                metadata
+            )
+
+        output_file = os.path.join(
+            self.output_dir,
+            f"{content_type}.docx"
+        )
+
+        document.save(output_file)
+
+        return output_file
 
     # =========================================================
     # GENERATION MODOP

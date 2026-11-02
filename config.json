@@ -1,4 +1,4 @@
 {
-    "excel_file": "data/input/yelen_export.xlsx",
+    "input_folder": "data/input",
     "output_folder": "data/output"
 }

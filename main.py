@@ -1,3 +1,4 @@
+import json
 import os
 
 from core.excel_reader import ExcelReader
@@ -10,8 +11,43 @@ from core.modop_reader import ModopReader
 # CONFIGURATION
 # =========================================================
 
+CONFIG_FILE = "config.json"
+
 INPUT_DIR = "data/input"
 OUTPUT_DIR = "data/output"
+
+
+def load_config():
+    """
+    Charge config.json et met à jour les dossiers
+    d'entrée / de sortie.
+    """
+
+    global INPUT_DIR, OUTPUT_DIR
+
+    if not os.path.exists(CONFIG_FILE):
+        print(f"⚠️  {CONFIG_FILE} introuvable, "
+              f"utilisation des dossiers par défaut.")
+        return {}
+
+    try:
+
+        with open(
+            CONFIG_FILE,
+            encoding="utf-8"
+        ) as file:
+            config = json.load(file)
+
+    except json.JSONDecodeError as error:
+
+        print(f"⚠️  {CONFIG_FILE} invalide ({error}), "
+              f"utilisation des dossiers par défaut.")
+        return {}
+
+    INPUT_DIR = config.get("input_folder", INPUT_DIR)
+    OUTPUT_DIR = config.get("output_folder", OUTPUT_DIR)
+
+    return config
 
 
 # =========================================================
@@ -87,6 +123,16 @@ def main():
     print("=" * 70)
     print("       SMARTLY KNOWLEDGE BUILDER")
     print("=" * 70)
+    print()
+
+    # -----------------------------------------------------
+    # Configuration
+    # -----------------------------------------------------
+
+    load_config()
+
+    print(f"Dossier d'entrée  : {INPUT_DIR}")
+    print(f"Dossier de sortie : {OUTPUT_DIR}")
     print()
 
     # -----------------------------------------------------
@@ -180,6 +226,15 @@ def main():
             .unique()
         )
 
+        # Exclusion des valeurs non textuelles
+        # (identifiants numériques parasite dans l'export)
+        content_types = [
+            content_type
+            for content_type in sorted(content_types)
+            if content_type
+            and not content_type.replace(".", "", 1).isdigit()
+        ]
+
         print(
             f"✓ {len(content_types)} types de contenu détectés."
         )
@@ -192,7 +247,7 @@ def main():
 
         yelen_count = 0
 
-        for content_type in sorted(content_types):
+        for content_type in content_types:
 
             subset = df_yelen[
                 df_yelen["type_contenu"]
